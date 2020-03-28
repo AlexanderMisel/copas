@@ -224,6 +224,13 @@ local _sleeping = {} do
            and not (tos > 0 and next(lethargy))
   end
 
+  function _sleeping:clear()
+    while heap:size() ~= 1 do
+      heap:pop()
+    end
+    lethargy = setmetatable({}, { __mode = "k" })
+  end
+
 end   -- _sleeping
 
 
@@ -883,6 +890,13 @@ function copas.removethread(thread)
   -- if the specified coroutine is registered, add it to the canceled table so
   -- that next time it tries to resume it exits.
   _canceled[thread] = _threads[thread or 0]
+end
+
+function copas.removeall()
+  _reading = newsocketset()
+  _writing = newsocketset()
+  _resumable:clear_resumelist()
+  _sleeping:clear()
 end
 
 
