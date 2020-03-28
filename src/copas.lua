@@ -225,7 +225,7 @@ local _sleeping = {} do
   end
 
   function _sleeping:clear()
-    while heap:size() ~= 1 do
+    while heap:size() > 1 do
       heap:pop()
     end
     lethargy = setmetatable({}, { __mode = "k" })
