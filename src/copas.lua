@@ -586,20 +586,16 @@ end
 -- @param sslt Table with ssl parameters
 -- @return wrapped ssl socket, or throws an error
 function copas.dohandshake(skt, sslt)
-  ssl = ssl or require("ssl")
-  local nskt, err = ssl.wrap(skt, sslt)
-  if not nskt then return error(err) end
   local queue
-  nskt:settimeout(0)  -- non-blocking on the ssl-socket
-  copas.settimeout(nskt, usertimeouts[skt]) -- copy copas user-timeout to newly wrapped one
-  sto_timeout(nskt, "write")
+  skt:settimeout(0)  -- non-blocking on the ssl-socket
+  sto_timeout(skt, "write")
 
   repeat
-    local success, err = nskt:dohandshake()
+    local success, err = skt:dohandshake()
 
     if success then
       sto_timeout()
-      return nskt
+      return skt
 
     elseif not _isSocketTimeout[err] then
       sto_timeout()
@@ -620,7 +616,7 @@ function copas.dohandshake(skt, sslt)
       error(err)
     end
 
-    coroutine.yield(nskt, queue)
+    coroutine.yield(skt, queue)
   until false
 end
 
@@ -656,10 +652,10 @@ local _skt_mt_tcp = {
 
                    -- TODO: socket.connect is a shortcut, and must be provided with an alternative
                    -- if ssl parameters are available, it will also include a handshake
-                   connect = function(self, ...)
-                     local res, err = copas.connect(self.socket, ...)
+                   connect = function(self, host, ...)
+                     local res, err = copas.connect(self.socket, host, ...)
                      if res and self.ssl_params then
-                       res, err = self:dohandshake()
+                       res, err = self:dohandshake(nil, host)
                      end
                      return res, err
                    end,
@@ -687,11 +683,15 @@ local _skt_mt_tcp = {
 
                    shutdown = function(self, ...) return self.socket:shutdown(...) end,
 
-                   dohandshake = function(self, sslt)
+                   dohandshake = function(self, sslt, host)
                      self.ssl_params = sslt or self.ssl_params
-                     local nskt, err = copas.dohandshake(self.socket, self.ssl_params)
-                     if not nskt then return nskt, err end
+                     ssl = ssl or require("ssl")
+                     local nskt, err = ssl.wrap(self.socket, self.ssl_params)
+                     if not nskt then return error(err) end
+                     if host then nskt:sni(host) end
+                     copas.settimeout(nskt, usertimeouts[self.socket]) -- copy copas user-timeout to newly wrapped one
                      self.socket = nskt  -- replace internal socket with the newly wrapped ssl one
+                     copas.dohandshake(nskt, self.ssl_params)
                      return self
                    end,
 
